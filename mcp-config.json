@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "dd-platform": {
+      "command": "npx",
+      "args": ["tsx", "src/server/mcp-server.ts"],
+      "env": {
+        "DD_API_URL": "http://localhost:3001"
+      }
+    }
+  }
+}

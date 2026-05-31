@@ -1,0 +1,15 @@
+node_modules/
+out/
+dist/
+output/
+*.db
+*.db-journal
+.env
+.env.local
+!.env.example
+.DS_Store
+thumbs.db
+*.log
+coverage/
+.claude/
+tmp/

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DD Platform</title>
+    <style>
+      body { background: #1e1e1e; color: #ccc; font-family: monospace; margin: 0; padding: 20px; }
+      .error-box { background: #2d0000; border: 1px solid #f44; padding: 15px; margin: 10px 0; border-radius: 4px; white-space: pre-wrap; word-break: break-all; }
+      .error-title { color: #f44747; font-weight: bold; margin-bottom: 8px; }
+    </style>
+  </head>
+  <body>
+    <div id="errors"></div>
+    <div id="root"></div>
+    <script>
+      const errorsEl = document.getElementById('errors');
+      function showError(label, msg, stack) {
+        const div = document.createElement('div');
+        div.className = 'error-box';
+        div.innerHTML = '<div class="error-title">' + label + '</div>' +
+          '<div>' + (msg || 'Unknown error') + '</div>' +
+          (stack ? '<div style="color:#888;margin-top:8px;font-size:12px">' + stack + '</div>' : '');
+        errorsEl.appendChild(div);
+      }
+      window.onerror = function(msg, src, line, col, err) {
+        showError('JS Error', msg + ' at ' + src + ':' + line + ':' + col, err && err.stack);
+      };
+      window.addEventListener('unhandledrejection', function(e) {
+        showError('Promise Rejection', e.reason && e.reason.message, e.reason && e.reason.stack);
+      });
+      console.log('Error handlers installed');
+    </script>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>

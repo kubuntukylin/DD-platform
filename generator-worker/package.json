@@ -1,0 +1,18 @@
+{
+  "name": "dd-platform-generator-worker",
+  "version": "0.1.0",
+  "description": "DD Platform - Generator Worker (isolated child process for agent code generation)",
+  "private": true,
+  "main": "./index.js",
+  "type": "commonjs",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "openai": "^6.39.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0"
+  }
+}
