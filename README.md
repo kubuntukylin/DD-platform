@@ -75,8 +75,8 @@ npm run dev
 
 ### 1. 主界面总览
 
-`[SCREENSHOT: main-overview.png]`
-*截取完整浏览器窗口，包含左侧 Sidebar、中央 Agent Graph、右侧 Chat Panel*
+<img width="1754" height="940" alt="245ae75646ec698ae49e2299ffa8fcef" src="https://github.com/user-attachments/assets/5c1d2ca1-43a9-4b2f-aea0-341cf5fd690f" />
+
 
 | 编号 | 区域 | 说明 |
 |------|------|------|
@@ -87,8 +87,6 @@ npm run dev
 
 ### 2. 创建项目
 
-`[SCREENSHOT: create-project.png]`
-*截取 Sidebar 区域的 Projects 部分，展示创建项目入口和已创建的项目列表*
 
 **操作步骤：**
 1. 点击 Sidebar 顶部的 `+ Project` 按钮
@@ -98,8 +96,8 @@ npm run dev
 
 ### 3. Agent 管理
 
-`[SCREENSHOT: agent-graph.png]`
-*截取 Agent Graph 视图，展示多个 Agent 节点和它们之间的连线（depends_on / communicates_with / shares_data）*
+<img width="1226" height="805" alt="image" src="https://github.com/user-attachments/assets/c5faebc8-1bc0-489a-8ca4-95c0b9bf69ae" />
+
 
 **Agent 是平台的核心单元**，每个 Agent 代表一个微服务：
 
@@ -109,9 +107,6 @@ npm run dev
 
 ### 4. Chat 模式
 
-`[SCREENSHOT: chat-mode.png]`
-*截取 Chat Panel 在 Chat 模式下的对话界面，展示一问一答的对话流*
-
 **Chat 模式**使用 DeepSeek 进行对话：
 - 理解项目架构和 Agent 关系
 - 回答技术问题
@@ -120,8 +115,8 @@ npm run dev
 
 ### 5. Build 模式
 
-`[SCREENSHOT: build-mode.png]`
-*截取 Chat Panel 在 Build 模式下的界面，展示 AI 执行工具调用的过程（tool-use 蓝色卡片、tool-result 绿色卡片）*
+<img width="1770" height="461" alt="image" src="https://github.com/user-attachments/assets/8f081bea-da02-43dc-ac05-3e1acdab4058" />
+
 
 **Build 模式**使用 Claude Code + MCP 工具链：
 - 创建/修改/删除 Agent
