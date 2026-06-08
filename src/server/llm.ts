@@ -11,7 +11,7 @@ export interface ChatMessage { role: 'system' | 'user' | 'assistant'; content: s
 export function createLLMProvider(config: LLMConfig) {
   if (!config.apiKey) throw new Error('No API key configured. Go to Settings to add your access key.')
 
-  const client = new OpenAI({ apiKey: config.apiKey, baseURL: config.baseUrl || undefined })
+  const client = new OpenAI({ apiKey: config.apiKey, baseURL: config.baseUrl || undefined, timeout: 60000, maxRetries: 1 })
 
   function buildParams(messages: ChatMessage[], stream?: boolean): Record<string, unknown> {
     const p: Record<string, unknown> = {
@@ -92,7 +92,18 @@ export function createDecomposer(llm: ReturnType<typeof createLLMProvider>) {
       const existingList = existingAgents?.length
         ? `\nEXISTING: ${existingAgents!.map((a: Record<string,unknown>) => (a as Record<string,unknown>).id || a.name).join(', ')}\n`
         : ''
-      const p = `Map relationships for these agents. Types: depends_on | communicates_with | shares_data${existingList}\n\nNew agents: ${JSON.stringify(agents.map(a => ({ id: a.id, name: a.name, inputs: a.inputs.map(i => i.source), outputs: a.outputs.map(o => o.destination) })))}\n\nOutput JSON:\n{"relationships":[{"sourceId":"id","targetId":"id","type":"depends_on","dataFlow":"data"}],"generationOrder":["id1"]}`
+      const p = `Map ALL relationships for these agents. Use ALL three types per pair where applicable.
+
+Types: depends_on (build dependency) | communicates_with (runtime API calls) | shares_data (shared DB/queue/topic)
+
+Agents: ${JSON.stringify(agents.map(a => ({ id: a.id, name: a.name, desc: (a as Record<string,unknown>).desc || '', inputs: a.inputs, outputs: a.outputs })))}${existingList}
+
+Output JSON with multiple types per pair:
+{"relationships":[
+  {"sourceId":"gw","targetId":"auth","type":"depends_on","dataFlow":"JWT"},
+  {"sourceId":"gw","targetId":"auth","type":"communicates_with","dataFlow":"token validation"},
+  {"sourceId":"device","targetId":"telemetry","type":"shares_data","dataFlow":"MQTT sensor data"}
+],"generationOrder":["auth","gw"]}`
       return llm.json<{ relationships: RelSpec[]; generationOrder: string[] }>([{ role: 'system', content: buildSys(rules) }, { role: 'user', content: p }])
     },
 

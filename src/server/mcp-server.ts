@@ -82,7 +82,7 @@ const TOOLS: Record<string, { def: ToolDef; handler: (args: Record<string,unknow
   create_agent: {
     def: {
       name: 'create_agent',
-      description: 'Create a new agent in an OpenBlueprint project. The agent is created as "pending" and will appear in the project graph. Do NOT create agents that already exist — use update_agent instead.',
+      description: 'Create a new agent in an OpenBlueprint project. The agent is created as "pending" and will appear in the project graph. CRITICAL: Set dependencies, communicatesWith, and sharesData to establish all three relationship types. Do NOT create agents that already exist — use update_agent instead.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -91,7 +91,9 @@ const TOOLS: Record<string, { def: ToolDef; handler: (args: Record<string,unknow
           description: { type: 'string', description: 'What this agent does (1-2 sentences)' },
           responsibilities: { type: 'array', items: { type: 'string' }, description: 'List of specific tasks this agent performs' },
           technologies: { type: 'array', items: { type: 'string' }, description: 'npm packages / technologies used' },
-          dependencies: { type: 'array', items: { type: 'string' }, description: 'IDs or names of agents this one depends on' },
+          dependencies: { type: 'array', items: { type: 'string' }, description: 'IDs of agents this one DEPENDS ON (build dependency — A needs B to start)' },
+          communicatesWith: { type: 'array', items: { type: 'string' }, description: 'IDs of agents this one COMMUNICATES WITH at runtime (API calls, data exchange)' },
+          sharesData: { type: 'array', items: { type: 'string' }, description: 'IDs of agents this one SHARES DATA with (same DB, queue, or event stream)' },
           inputs: { type: 'array', items: { type: 'object' }, description: 'Data inputs: [{name, type, source}] where source is an agent ID' },
           outputs: { type: 'array', items: { type: 'object' }, description: 'Data outputs: [{name, type, destination}] where destination is an agent ID' },
           complexity: { type: 'string', description: 'low, medium, or high' },
@@ -116,6 +118,8 @@ const TOOLS: Record<string, { def: ToolDef; handler: (args: Record<string,unknow
         specJson: spec,
         interfaceJson: iface,
         dependencies: args.dependencies || [],
+        communicatesWith: args.communicatesWith || [],
+        sharesData: args.sharesData || [],
       }
       const agent = await apiFetch('POST', '/api/agents', body)
       return { content: [{ type: 'text', text: JSON.stringify(agent, null, 2) }] }
@@ -125,7 +129,7 @@ const TOOLS: Record<string, { def: ToolDef; handler: (args: Record<string,unknow
   update_agent: {
     def: {
       name: 'update_agent',
-      description: 'Modify an EXISTING agent. Use this to rename, change description, update dependencies, or modify I/O interfaces. Only specify the fields you want to change — unspecified fields are left unchanged.',
+      description: 'Modify an EXISTING agent. Use this to rename, change description, update dependencies/communications/data-sharing, or modify I/O interfaces. Only specify the fields you want to change.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -134,7 +138,9 @@ const TOOLS: Record<string, { def: ToolDef; handler: (args: Record<string,unknow
           description: { type: 'string', description: 'New description' },
           responsibilities: { type: 'array', items: { type: 'string' }, description: 'Updated responsibilities' },
           technologies: { type: 'array', items: { type: 'string' }, description: 'Updated technologies' },
-          dependencies: { type: 'array', items: { type: 'string' }, description: 'Updated dependency agent IDs' },
+          dependencies: { type: 'array', items: { type: 'string' }, description: 'Updated depends_on agent IDs' },
+          communicatesWith: { type: 'array', items: { type: 'string' }, description: 'Updated communicates_with agent IDs' },
+          sharesData: { type: 'array', items: { type: 'string' }, description: 'Updated shares_data agent IDs' },
           inputs: { type: 'array', items: { type: 'object' }, description: 'Updated inputs' },
           outputs: { type: 'array', items: { type: 'object' }, description: 'Updated outputs' },
           complexity: { type: 'string', description: 'Updated complexity level' },
@@ -143,12 +149,13 @@ const TOOLS: Record<string, { def: ToolDef; handler: (args: Record<string,unknow
       },
     },
     handler: async (args) => {
-      // Separate agent fields from dependencies
       const body: Record<string,unknown> = {}
       const passthrough = ['agentId','name','description','responsibilities','technologies','inputs','outputs','complexity']
       for (const k of passthrough) { if (args[k] !== undefined) body[k] = args[k] }
-      // dependencies is a special case — requires relationship management in the route
+      // Relationship fields — requires relationship management in the route
       if (Array.isArray(args.dependencies)) body['dependencies'] = args.dependencies
+      if (Array.isArray(args.communicatesWith)) body['communicatesWith'] = args.communicatesWith
+      if (Array.isArray(args.sharesData)) body['sharesData'] = args.sharesData
       const agent = await apiFetch('PUT', '/api/agents/' + args.agentId, body)
       return { content: [{ type: 'text', text: JSON.stringify(agent, null, 2) }] }
     },

@@ -54,6 +54,10 @@ async function main() {
   // Clean up orphaned relationships (source or target agent no longer exists)
   const orphaned = db.prepare("DELETE FROM agent_relationships WHERE source_agent_id NOT IN (SELECT id FROM agents) OR target_agent_id NOT IN (SELECT id FROM agents)").run()
   if (orphaned) console.log(`[startup] Cleaned up ${orphaned} orphaned relationships`)
+
+  // Clean up empty assistant placeholder messages from crashed Build sessions
+  const emptyMsgs = db.prepare("DELETE FROM messages WHERE role='assistant' AND content=''").run()
+  if (emptyMsgs) console.log(`[startup] Cleaned up ${emptyMsgs} empty placeholder messages`)
   saveDB()
 
   // Shutdown sequence

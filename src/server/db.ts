@@ -212,6 +212,60 @@ function runMigrations(database: DB) {
     }
     database.prepare("INSERT INTO _migrations (version,name,applied_at) VALUES (8,?,?)").run('agent_relationship_skills', now())
   }
+
+  // V9: Enhance relationship skills with all three types and JSON examples
+  if (!applied.has(9)) {
+    database.prepare('UPDATE skills SET prompt_content=? WHERE id=?').run(
+      `CRITICAL: After creating agents, define ALL relationship types — not just depends_on.
+
+## THREE RELATIONSHIP TYPES
+1. depends_on — Agent A requires Agent B to START (build dependency).
+   Example: {"sourceId":"api-gateway","targetId":"auth-service","type":"depends_on","dataFlow":"JWT validation tokens"}
+
+2. communicates_with — Agents exchange data at RUNTIME (bidirectional or unidirectional).
+   Example: {"sourceId":"order-service","targetId":"payment-service","type":"communicates_with","dataFlow":"Order payment requests and status updates"}
+
+3. shares_data — Agents share a data store or event stream.
+   Example: {"sourceId":"device-service","targetId":"telemetry-service","type":"shares_data","dataFlow":"Device telemetry via shared MQTT topic"}
+
+## WHEN TO USE EACH
+- depends_on: A calls B's API → B must build first. Use for API consumers.
+- communicates_with: A and B exchange requests at runtime. Use for REST/gRPC callers.
+- shares_data: A and B read/write same DB or message queue. Use for data pipelines.
+
+## OUTPUT FORMAT
+For EVERY pair of interacting agents, output ALL applicable relationship types:
+{"relationships":[
+  {"sourceId":"api-gateway","targetId":"auth-service","type":"depends_on","dataFlow":"JWT tokens"},
+  {"sourceId":"api-gateway","targetId":"auth-service","type":"communicates_with","dataFlow":"Auth requests"},
+  {"sourceId":"device-service","targetId":"telemetry-service","type":"shares_data","dataFlow":"MQTT sensor data"}
+]}`, 'skill-agent-relationships')
+
+    database.prepare('UPDATE skills SET prompt_content=? WHERE id=?').run(
+      `When creating agents, declare ALL interaction types — not just dependencies:
+
+1. dependencies field: list agent IDs this agent DEPENDS ON (build order).
+   If A calls B's API, add B's ID to A's dependencies.
+
+2. communicatesWith field: list agent IDs this agent COMMUNICATES WITH at runtime.
+   If A sends requests to B or B sends requests to A, add to communicatesWith.
+   Example: Data sync, notification push, health check polling.
+
+3. sharesData field: list agent IDs this agent SHARES DATA with.
+   If A and B use the same database, message queue, or event bus, add to sharesData.
+   Example: Shared MQTT topic, Redis pub/sub, Kafka stream.
+
+CRITICAL: A single pair of agents often needs MULTIPLE relationship types.
+For example, api-gateway calling auth-service needs BOTH:
+- depends_on (auth must start first)
+- communicates_with (ongoing token validation)
+
+Always review each agent's inputs/outputs to identify ALL three types.`,
+      'skill-service-deps'
+    )
+
+    database.prepare("INSERT INTO _migrations (version,name,applied_at) VALUES (9,?,?)").run('enhance_relationship_skills', now())
+  }
 }
 
 function now() { return new Date().toISOString() }

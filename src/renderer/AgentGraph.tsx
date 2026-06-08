@@ -155,19 +155,27 @@ function AgentDetail({ agent, onClose }: { agent: import('../shared/types').Agen
   const [saving, setSaving] = React.useState(false)
   const [regenerating, setRegenerating] = React.useState(false)
   const [files, setFiles] = React.useState<{name:string,path:string,size:number}[]>([])
+  const [fileTree, setFileTree] = React.useState<FileTreeNode[]>([])
   const [viewingFile, setViewingFile] = React.useState<string | null>(null)
   const [fileContent, setFileContent] = React.useState('')
   const [loadingFile, setLoadingFile] = React.useState(false)
   const [editingFile, setEditingFile] = React.useState(false)
   const [editedContent, setEditedContent] = React.useState('')
   const [savingFile, setSavingFile] = React.useState(false)
+  const [expandedDirs, setExpandedDirs] = React.useState<Set<string>>(new Set())
   const updateAgent = useAgentStore(s => s.updateAgent)
   const removeAgent = useAgentStore(s => s.removeAgent)
   const projects = useProjectStore(s => s.projects)
   const project = agent.projectId ? projects.find(p => p.id === agent.projectId) : null
 
   React.useEffect(() => {
-    if (liveAgent.outputPath) { api.agents.files(liveAgent.id).then(f => setFiles(f)).catch(() => {}) }
+    if (liveAgent.outputPath) {
+      api.agents.files(liveAgent.id).then(f => setFiles(f)).catch(() => {})
+      // Load full file tree for browsing subdirectories
+      api.get<FileTreeNode[]>('/api/agents/' + liveAgent.id + '/file-tree').then(t => {
+        setFileTree(t)
+      }).catch(() => {})
+    }
   }, [liveAgent.id, liveAgent.outputPath])
 
   const viewFile = async (path: string) => {
@@ -211,11 +219,19 @@ function AgentDetail({ agent, onClose }: { agent: import('../shared/types').Agen
             <p className="text-[11px] text-gray-500 mt-0.5 font-mono">{project.outputPath || 'output'}</p>
           </div>
         )}
-        {liveAgent.outputPath && (
+        {liveAgent.outputPath && (() => {
+          const hasTree = fileTree.length > 0
+          return (
           <div>
             <div className="text-[11px] text-gray-500 mb-1">Generated Files</div>
-            <p className="text-[11px] text-blue-400 font-mono mb-2">{liveAgent.outputPath}</p>
-            {files.length > 0 && (
+            <p className="text-[11px] text-blue-400 font-mono mb-2 truncate">{liveAgent.outputPath}</p>
+            {hasTree ? (
+              <div className="space-y-0 max-h-72 overflow-y-auto bg-[#0d1117] rounded-lg p-1">
+                <FileTreeDisplay nodes={fileTree} depth={0} expandedDirs={expandedDirs}
+                  toggleDir={(d) => setExpandedDirs(prev => { const n = new Set(prev); n.has(d) ? n.delete(d) : n.add(d); return n })}
+                  selectedFile={viewingFile} onSelect={viewFile} />
+              </div>
+            ) : files.length > 0 ? (
               <div className="space-y-0.5 max-h-48 overflow-y-auto bg-[#0d1117] rounded-lg p-1.5">
                 {files.map(f => (
                   <button key={f.name} onClick={() => viewFile(f.path)} className={`w-full text-left px-2 py-1 rounded text-[11px] flex justify-between items-center transition-colors ${viewingFile === f.path ? 'bg-blue-500/20 text-blue-300' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}>
@@ -224,17 +240,20 @@ function AgentDetail({ agent, onClose }: { agent: import('../shared/types').Agen
                   </button>
                 ))}
               </div>
-            )}
+            ) : null}
             {viewingFile && (
               <div className="mt-2 bg-[#0d1117] rounded-lg overflow-hidden border border-[#2d3348]">
                 <div className="px-2 py-1 bg-[#1a1d2e] border-b border-[#2d3348] flex items-center justify-between">
-                  <span className="text-[10px] text-gray-400 font-mono truncate">{viewingFile.split('/').pop()}</span>
-                  <button onClick={() => setViewingFile(null)} className="text-gray-500 hover:text-white text-[10px]">✕</button>
+                  <span className="text-[10px] text-gray-400 font-mono truncate">{viewingFile.replace(/\\/g, '/').split('/').pop()}</span>
+                  <div className="flex gap-1">
+                    <button onClick={() => { setEditingFile(true); setEditedContent(fileContent) }} className="text-accent hover:text-blue-300 text-[10px] px-1">Edit</button>
+                    <button onClick={() => setViewingFile(null)} className="text-gray-500 hover:text-white text-[10px]">✕</button>
+                  </div>
                 </div>
-                <div className="p-2 max-h-64 overflow-y-auto">
+                <div className="p-2 max-h-96 overflow-y-auto">
                   {loadingFile ? <div className="text-[11px] text-gray-500 py-4 text-center">Loading...</div> : editingFile ? (
                     <div>
-                      <Editor height="300px" language="typescript" theme="vs-dark"
+                      <Editor height="400px" language={detectLanguage(viewingFile)} theme="vs-dark"
                         value={editedContent} onChange={v => setEditedContent(v || '')}
                         options={{ fontSize: 11, minimap: { enabled: false }, scrollBeyondLastLine: false, wordWrap: 'on', lineNumbers: 'on', renderWhitespace: 'selection' }} />
                       <div className="flex gap-2 mt-1.5">
@@ -249,7 +268,7 @@ function AgentDetail({ agent, onClose }: { agent: import('../shared/types').Agen
                     </div>
                   ) : (
                     <div>
-                      <pre className="text-[11px] text-gray-300 font-mono whitespace-pre-wrap break-all leading-relaxed max-h-64 overflow-y-auto">{fileContent}</pre>
+                      <pre className="text-[11px] text-gray-300 font-mono whitespace-pre-wrap break-all leading-relaxed max-h-96 overflow-y-auto">{fileContent}</pre>
                       <button onClick={() => { setEditingFile(true); setEditedContent(fileContent) }} className="mt-1.5 px-2 py-0.5 text-[10px] bg-gray-700 hover:bg-gray-600 text-gray-300 rounded">Edit</button>
                     </div>
                   )}
@@ -257,7 +276,7 @@ function AgentDetail({ agent, onClose }: { agent: import('../shared/types').Agen
               </div>
             )}
           </div>
-        )}
+        )})()}
         <div>
           <div className="text-[11px] text-gray-500 mb-1">Description</div>
           {edit ? (
@@ -357,4 +376,90 @@ function AddFeature({ agent }: { agent: import('../shared/types').Agent }) {
       </button>
     </div>
   )
+}
+
+// ---- File Tree ----
+interface FileTreeNode { name: string; type: 'file' | 'dir'; path: string; size: number; children?: FileTreeNode[] }
+
+function FileTreeDisplay({ nodes, depth, expandedDirs, toggleDir, selectedFile, onSelect }: {
+  nodes: FileTreeNode[]
+  depth: number
+  expandedDirs: Set<string>
+  toggleDir: (path: string) => void
+  selectedFile: string | null
+  onSelect: (path: string) => void
+}) {
+  // Directories first, then files, both alphabetically
+  const sorted = [...nodes].sort((a, b) => {
+    if (a.type !== b.type) return a.type === 'dir' ? -1 : 1
+    return a.name.localeCompare(b.name)
+  })
+  return (
+    <>
+      {sorted.map(n => {
+        if (n.type === 'dir') {
+          const isExpanded = expandedDirs.has(n.path)
+          const children = (n as { children?: FileTreeNode[] }).children || []
+          return (
+            <div key={n.path}>
+              <button onClick={() => toggleDir(n.path)}
+                className="w-full text-left px-1 py-0.5 text-[11px] text-gray-400 hover:text-gray-200 flex items-center gap-1 rounded hover:bg-white/5">
+                <span className="text-[10px] w-3 text-center">{isExpanded ? '▾' : '▸'}</span>
+                <span className="text-yellow-600">📁</span>
+                <span className="font-mono truncate">{n.name}/</span>
+              </button>
+              {isExpanded && (
+                <div className="ml-3 border-l border-[#2d3348] pl-2">
+                  <FileTreeDisplay nodes={children} depth={depth + 1}
+                    expandedDirs={expandedDirs} toggleDir={toggleDir}
+                    selectedFile={selectedFile} onSelect={onSelect} />
+                </div>
+              )}
+            </div>
+          )
+        }
+        return (
+          <button key={n.path} onClick={() => onSelect(n.path)}
+            className={`w-full text-left px-1 py-0.5 text-[11px] flex items-center gap-1 rounded transition-colors ${
+              selectedFile === n.path ? 'bg-blue-500/20 text-blue-300' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
+            }`}>
+            <span className="w-3" />
+            <span className="text-[10px]">{iconForFile(n.name)}</span>
+            <span className="font-mono truncate flex-1">{n.name}</span>
+            {n.size > 0 && <span className="text-[9px] text-gray-600 flex-shrink-0">{formatSize(n.size)}</span>}
+          </button>
+        )
+      })}
+    </>
+  )
+}
+
+function iconForFile(name: string): string {
+  if (name.endsWith('.tsx')) return '⚛️'
+  if (name.endsWith('.ts')) return '🔷'
+  if (name.endsWith('.json')) return '{ }'
+  if (name === 'Dockerfile') return '🐳'
+  if (name.endsWith('.html')) return '🌐'
+  if (name.endsWith('.css')) return '🎨'
+  if (name.endsWith('.md')) return '📝'
+  if (name.endsWith('.js')) return '📒'
+  return '📄'
+}
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}K`
+  return `${(bytes / 1024 / 1024).toFixed(1)}M`
+}
+
+function detectLanguage(filePath: string): string {
+  if (filePath.endsWith('.tsx')) return 'typescriptreact'
+  if (filePath.endsWith('.ts')) return 'typescript'
+  if (filePath.endsWith('.json')) return 'json'
+  if (filePath.endsWith('.html')) return 'html'
+  if (filePath.endsWith('.css')) return 'css'
+  if (filePath.endsWith('.md')) return 'markdown'
+  if (filePath.endsWith('.js')) return 'javascript'
+  if (filePath.endsWith('.yaml') || filePath.endsWith('.yml')) return 'yaml'
+  return 'plaintext'
 }

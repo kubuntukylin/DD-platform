@@ -417,14 +417,16 @@ export function startClaudeCodeAction(
 - Code writing: write_file
 - Shell: exec_shell (npm install, tsc, docker, etc.)
 
-## RELATIONSHIP TYPES (use these to connect agents)
-- depends_on: Agent A needs Agent B to START. If A calls B's API, set depends_on.
-- communicates_with: Runtime data exchange between agents.
-- shares_data: Agents share a data store or event stream.
+## RELATIONSHIP TYPES (use ALL three when creating agents)
+- dependencies: Agent A needs Agent B to START. If A calls B's API, list B as a dependency.
+- communicatesWith: Agents exchange data at RUNTIME. If A calls B's API or B calls A's, list as communicatesWith.
+- sharesData: Agents share a data store or event stream (same DB, MQTT topic, Redis channel).
+
+A single agent pair often needs MULTIPLE types. Example: api-gateway depends_on auth-service AND communicatesWith auth-service.
 
 ## RULES
 1. ALWAYS call list_agents or get_project_context FIRST before making changes. Never guess.
-2. When creating agents: ALWAYS set the dependencies field to list agent IDs this agent depends on.
+2. When creating agents: set dependencies, communicatesWith, AND sharesData fields. Review each agent's inputs/outputs to identify ALL three relationship types.
 3. After creating ALL agents: MANDATORY — call analyze_relationships(projectId) to auto-analyze and create all relationships. This is CRITICAL for correct build order.
 4. When modifying an agent's CODE: first call list_agent_files(agentId) to see what files exist, then read_file to inspect the code, then write_file to make changes.
 5. After writing code: run exec_shell to verify (e.g., "cd <agent-dir> && npx tsc --noEmit").

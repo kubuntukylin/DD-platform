@@ -7,6 +7,7 @@ export default function StatusBar() {
   const [info, setInfo] = useState({ provider: '', model: '', hasKey: false, loaded: false })
   const [skillStats, setSkillStats] = useState({ total: 0, active: 0 })
   const setActiveTab = useUIStore(s => s.setActiveTab)
+  const activeTab = useUIStore(s => s.activeTab)
 
   useEffect(() => {
     api.llm.list().then(configs => {
@@ -16,12 +17,13 @@ export default function StatusBar() {
     }).catch(() => setInfo(p => ({ ...p, loaded: true })))
   }, [])
 
+  // Re-fetch skill stats on mount and whenever user switches back from Skills tab
   useEffect(() => {
     api.get<Record<string,unknown>[]>('/api/skills').then(skills => {
       const active = skills.filter((s: Record<string,unknown>) => (s.isActive !== undefined ? s.isActive : s.is_active) !== 0).length
       setSkillStats({ total: skills.length, active })
     }).catch(() => {})
-  }, [])
+  }, [activeTab])
 
   return (
     <div className="h-6 bg-bg-secondary border-t border-border flex items-center px-3 text-[11px] flex-shrink-0 select-none">

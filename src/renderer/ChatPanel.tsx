@@ -44,18 +44,30 @@ export default function ChatPanel() {
       api.convs.messages(cid)
         .then(m => {
           if (cancelled) return
-          useChatStore.getState().setMessages(cid, m as never)
+          // Filter out empty assistant placeholders leftover from crashed Build sessions
+          const msgs = (m as Record<string,unknown>[]).filter(msg =>
+            !(msg.role === 'assistant' && !(msg.content as string || '').trim())
+          )
+          useChatStore.getState().setMessages(cid, msgs as never)
+          // Sync conversation list so sidebar shows it
+          api.convs.list().then(cs => {
+            if (!cancelled) useChatStore.getState().setConversations(cs as never)
+          }).catch(() => {})
           setLoadingMessages(false)
         })
         .catch(err => {
           if (cancelled) return
-          if (attempt < 2) setTimeout(() => load(attempt + 1), 1000)
-          else {
-            // Stale ID — conversation was deleted. Clear it.
-            console.error('Failed to load messages:', err)
+          const isNotFound = (err as Error).message?.includes('404')
+          if (isNotFound || attempt >= 5) {
+            // Conversation truly doesn't exist — clear stale ID
+            console.error('Conversation not found, clearing')
             localStorage.removeItem('activeConvId')
             useChatStore.getState().setActiveConversation(null)
             setLoadingMessages(false)
+          } else {
+            // Transient error — retry with exponential backoff
+            const delay = Math.min(1000 * Math.pow(2, attempt), 16000)
+            setTimeout(() => load(attempt + 1), delay)
           }
         })
     }
@@ -213,11 +225,12 @@ export default function ChatPanel() {
       useChatStore.getState().clearActionEvents()
       const result = await api.convs.chat(convId, content, buildMode)
       if (result.projectId) setActiveProject(result.projectId as string)
-      // B8: ensure assistant message is in store (WebSocket may miss it)
-      if (result.message) {
+      // Only add assistant message if it has real content (avoid empty boxes in Build mode)
+      const resultMsg = result.message as Record<string,unknown> | undefined
+      if (resultMsg && (resultMsg.content as string || '').length > 0) {
         const msgs = useChatStore.getState().messages[convId] || []
-        if (!msgs.some(m => m.id === (result.message as Record<string,unknown>).id)) {
-          useChatStore.getState().addMessage(convId, result.message as never)
+        if (!msgs.some(m => m.id === resultMsg.id)) {
+          useChatStore.getState().addMessage(convId, resultMsg as never)
         }
       }
       // Add newly created agents + relationships to the store immediately
@@ -234,10 +247,12 @@ export default function ChatPanel() {
       if (result.plan) {
         useChatStore.getState().setPlan(result.plan as never)
       }
-      // If no streaming arrived (sync response), stop sending
-      setTimeout(() => {
-        if (!useChatStore.getState().streamingContent) useChatStore.getState().setIsSending(false)
-      }, 200)
+      // Chat mode: if no streaming arrived, stop sending. Build mode: stay sending until action:done.
+      if (!buildMode) {
+        setTimeout(() => {
+          if (!useChatStore.getState().streamingContent) useChatStore.getState().setIsSending(false)
+        }, 200)
+      }
 
     } catch (err) {
       useChatStore.getState().setIsSending(false)
@@ -405,13 +420,19 @@ export default function ChatPanel() {
           </div>
         )}
 
-        {/* Loading dots */}
+        {/* Loading / Build progress */}
         {chat.isSending && !chat.streamingContent && (
           <div className="mb-5 flex justify-start">
-            <div className="rounded-lg px-4 py-3 bg-bg-secondary border border-border flex gap-2">
-              <span className="w-1.5 h-1.5 bg-accent rounded-full animate-bounce" />
-              <span className="w-1.5 h-1.5 bg-accent rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-              <span className="w-1.5 h-1.5 bg-accent rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+            <div className="rounded-lg px-4 py-3 bg-bg-secondary border border-border">
+              {buildMode ? (
+                <BuildProgress events={actionEvents} />
+              ) : (
+                <div className="flex gap-2">
+                  <span className="w-1.5 h-1.5 bg-accent rounded-full animate-bounce" />
+                  <span className="w-1.5 h-1.5 bg-accent rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                  <span className="w-1.5 h-1.5 bg-accent rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -533,6 +554,58 @@ export default function ChatPanel() {
       </div>
       </div>
       <BuildBoard />
+    </div>
+  )
+}
+
+function BuildProgress({ events }: { events: ActionEvent[] }) {
+  const toolUses = events.filter(e => e.type === 'tool-use')
+  const hasResult = events.some(e => e.type === 'tool-result')
+  const done = events.find(e => e.type === 'done')
+  const hasError = events.some(e => e.type === 'error')
+
+  let phase: 'starting' | 'thinking' | 'executing' | 'done' = 'starting'
+  if (done) phase = 'done'
+  else if (toolUses.length > 0 && hasResult) phase = 'executing'
+  else if (toolUses.length > 0) phase = 'executing'
+  else if (events.some(e => e.type === 'thinking' || e.type === 'system')) phase = 'thinking'
+
+  const lastTool = toolUses[toolUses.length - 1]
+  const toolName = lastTool?.name?.replace(/^mcp__[^_]+__/, '') || ''
+
+  return (
+    <div className="text-[12px]">
+      <div className="flex items-center gap-2 mb-1.5">
+        {phase !== 'done' && !hasError && (
+          <span className="w-2 h-2 bg-accent rounded-full animate-pulse" />
+        )}
+        {hasError && <span className="w-2 h-2 bg-error rounded-full" />}
+        {done && (
+          <span className={`w-2 h-2 rounded-full ${done.status === 'completed' ? 'bg-success' : done.status === 'stopped' ? 'bg-warning' : 'bg-error'}`} />
+        )}
+        <span className={`font-semibold ${hasError ? 'text-error' : done ? (done.status === 'completed' ? 'text-success' : done.status === 'stopped' ? 'text-warning' : 'text-error') : 'text-accent'}`}>
+          {hasError ? 'Error' :
+           done ? (done.status === 'completed' ? 'Build Complete' : done.status === 'stopped' ? 'Stopped' : 'Build Failed') :
+           phase === 'starting' ? 'Starting Claude Code...' :
+           phase === 'thinking' ? 'Analyzing...' :
+           `Executing: ${toolName || '...'}`}
+        </span>
+      </div>
+      {/* Progress bar */}
+      {phase !== 'done' && !hasError && (
+        <div className="w-full h-1 bg-bg-tertiary rounded-full overflow-hidden">
+          <div className="h-full bg-accent rounded-full animate-pulse transition-all"
+            style={{ width: phase === 'starting' ? '15%' : phase === 'thinking' ? '35%' : toolUses.length > 0 ? `${Math.min(40 + toolUses.length * 15, 90)}%` : '25%' }} />
+        </div>
+      )}
+      {done && (
+        <p className="text-[11px] text-text-tertiary mt-1">
+          {done.content ? (typeof done.content === 'string' ? done.content.slice(0, 120) : '') : ''}
+        </p>
+      )}
+      {hasError && (
+        <p className="text-[11px] text-error mt-1">{events.find(e => e.type === 'error')?.text || 'Unknown error'}</p>
+      )}
     </div>
   )
 }
